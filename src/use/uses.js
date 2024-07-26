@@ -1,6 +1,7 @@
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls";
+import { Reflector } from 'three/examples/jsm/objects/Reflector'
 import * as THREE from "three";
 
 export const useCanvasResize = (camera, canvas, renderer) => {
@@ -17,6 +18,8 @@ export const useCanvasResize = (camera, canvas, renderer) => {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   });
 };
+
+
 
 export const useCreateControls = (options) => {
   let controls = new OrbitControls(options.camera, options.canvas);
@@ -61,6 +64,7 @@ export const useTransformControl = (options) => {
   return transformControls;
 };
 
+
 export class useCreateModel {
   constructor(params) {
     this.Init(params);
@@ -74,7 +78,7 @@ export class useCreateModel {
   LoadModels(params) {
     this.params = params;
 
-    new GLTFLoader().load(this.params.model, (gltf) => {
+    new GLTFLoader(this.params.preloader).load(this.params.model, (gltf) => {
       this.model = gltf.scene;
       this.model.updateMatrixWorld(true);
       this.params.meshStore.push(gltf.scene);

@@ -11,6 +11,7 @@ import {
   unref,
 } from "vue";
 import { clock } from "@/constants.js";
+import { LoadingManager } from "three";
 import {
   useCanvasResize,
   useCreateControls,
@@ -31,9 +32,14 @@ let delta,
   transformControls,
   door;
 
+const scale = {
+  total: 1,
+  asdasd: 555,
+};
+
 const gui = new dat.GUI({
   width: 500,
-  closeFolders: true
+  closeFolders: true,
 });
 
 const sizes = ref(null);
@@ -48,13 +54,13 @@ const lightParams = ref({
 });
 
 const boxMaterialParametrs = ref({
-  transparent: false,
-  opacity: 1,
   side: THREE.DoubleSide,
   wireframe: false,
   metalness: 0.7,
   roughness: 0.2,
   color: "#ff361c",
+  clearcoat: 1,
+  clearcoatRoughness: 0.1,
 });
 
 const boxGeometryParametrs = ref({
@@ -142,6 +148,18 @@ const createEnvierment = () => {
   // envMap.mapping = THREE.EquirectangularReflectionMapping
 };
 
+const createPreloader = () => {
+  return new LoadingManager(
+    () => {
+      console.log("done");
+      createGui();
+    },
+    (itemUrl, itemsLoaded, itemsTotal) => {
+      let loadProc = itemsLoaded / itemsTotal;
+    }
+  );
+};
+
 const createSphere = (material) => {
   const glassMaterial = new THREE.MeshPhysicalMaterial({ ...material });
   const glassGeometry = new THREE.SphereGeometry(0.5, 28, 28, 1);
@@ -171,11 +189,26 @@ const createPlane = (material, geometry) => {
   scene.add(plane);
 };
 
+const resizeModel = (toScale) => {
+  door.model.scale.set(toScale, toScale, toScale);
+};
+
 const createGui = () => {
   scene.add(new THREE.AxesHelper(2));
 
   let light = gui.addFolder("Light");
   let box_Material = gui.addFolder("Box Material");
+  let door_scale = gui.addFolder("Scale");
+
+  door_scale
+    .add(scale, "total")
+    .min(0.2)
+    .max(3)
+    .step(0.001)
+    .name("Scale")
+    .onChange(() => {
+      resizeModel(scale.total);
+    });
 
   box_Material
     .addColor(boxMaterialParametrs.value, "color")
@@ -275,8 +308,7 @@ const init = () => {
     transmission: 1.0,
     roughness: 0.2,
     metalness: 0,
-    clearcoat: 0.3,
-    clearcoatRoughness: 0.25,
+
     color: new THREE.Color(0xffffff),
     ior: 1.2,
     thickness: 10.0,
@@ -307,14 +339,13 @@ const init = () => {
     orbitControls: controls,
   });
 
-  console.log(transformControls);
-
   door = new useCreateModel({
     model: `${models}door.glb`,
     scene: scene,
-    scale: new THREE.Vector3(1, 1, 1),
+    scale: new THREE.Vector3(scale.total, scale.total, scale.total),
     meshStore: mashes.value,
     controls: transformControls,
+    preloader: createPreloader(),
 
     rotation: {
       x: 0,
@@ -328,8 +359,6 @@ const init = () => {
       z: 0,
     },
   });
-
-  createGui();
 
   useCanvasResize(camera, webglCanvas.value, renderer);
 };
