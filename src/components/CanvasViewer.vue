@@ -17,8 +17,10 @@ import {
   useCreateControls,
   useCreateModel,
   useTransformControl,
+  useTextureLoader,
 } from "@/use/uses.js";
 
+const doorMap = new URL("/textures/door_2", import.meta.url).href + "/";
 const enviermentMap = new URL("/envierment", import.meta.url).href + "/";
 const models = new URL("/models", import.meta.url).href + "/";
 
@@ -30,12 +32,23 @@ let delta,
   boxMaterial,
   boxGeometry,
   transformControls,
+  alterDoor,
   door;
 
-const scale = {
-  total: 1,
-  asdasd: 555,
+// Настройки двери
+let doorWidth = 1;
+let doorHeight = 2;
+let doorThickness = 0.1;
+let frameThickness = 0.1;
+
+const doorParams = {
+  width: doorWidth,
+  height: doorHeight,
+  thickness: doorThickness,
+  frameThickness: frameThickness,
 };
+
+const doorTextures = new Object();
 
 const gui = new dat.GUI({
   width: 500,
@@ -148,18 +161,6 @@ const createEnvierment = () => {
   // envMap.mapping = THREE.EquirectangularReflectionMapping
 };
 
-const createPreloader = () => {
-  return new LoadingManager(
-    () => {
-      console.log("done");
-      createGui();
-    },
-    (itemUrl, itemsLoaded, itemsTotal) => {
-      let loadProc = itemsLoaded / itemsTotal;
-    }
-  );
-};
-
 const createSphere = (material) => {
   const glassMaterial = new THREE.MeshPhysicalMaterial({ ...material });
   const glassGeometry = new THREE.SphereGeometry(0.5, 28, 28, 1);
@@ -174,8 +175,170 @@ const createBox = (material, geometry) => {
   boxGeometry = new THREE.BoxGeometry(geometry.x, geometry.y, geometry.z);
   let box = new THREE.Mesh(boxGeometry, boxMaterial);
   box.castShadow = true;
-  box.receiveShadow = true;
+  // box.receiveShadow = true;
   scene.add(box);
+};
+
+const createAlterDoor = (width, height, thickness, frameThickness) => {
+  useTextureLoader(doorMap, doorTextures);
+
+  for (let texture in doorTextures) {
+    doorTextures[texture].wrapS = THREE.RepeatWrapping;
+    doorTextures[texture].wrapT = THREE.RepeatWrapping;
+  }
+
+  const doorGroup = new THREE.Group();
+
+  function createBeveledBoxGeometry(width, height, depth, bevelSize) {
+    // Создаем форму с фасками
+    const shape = new THREE.Shape();
+    shape.moveTo(0, 0);
+    shape.lineTo(width - bevelSize, 0);
+    shape.lineTo(width - bevelSize, height - bevelSize);
+    shape.lineTo(0, height - bevelSize);
+    shape.lineTo(0, 0);
+
+    const extrudeSettings = {
+      steps: 1,
+      depth: depth,
+      bevelEnabled: true,
+      bevelThickness: bevelSize,
+      bevelSize: bevelSize * 0.5, // Уменьшаем размер фаски
+      bevelSegments: 5,
+    };
+
+    const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+
+    // Центрирование геометрии
+    geometry.computeBoundingBox();
+    const boundingBox = geometry.boundingBox;
+    const offset = new THREE.Vector3();
+    boundingBox.getCenter(offset).multiplyScalar(-1);
+    geometry.translate(offset.x, offset.y, offset.z);
+
+    return geometry;
+  }
+
+  // Панель двери
+  const panelGeometry = createBeveledBoxGeometry(
+    width,
+    height + frameThickness,
+    thickness * 0.05,
+    0.05
+  );
+
+  const panelMaterial = new THREE.MeshPhysicalMaterial({
+    map: doorTextures.color,
+    aoMap: doorTextures.arm,
+    aoMapIntensity: 1,
+    metalnessMap: doorTextures.arm,
+    roughnessMap: doorTextures.arm,
+    normalMap: doorTextures.normal,
+    side: THREE.DoubleSide,
+    clearcoat: 0,
+    clearcoatRoughness: 0,
+    metalness: 0.1,
+    roughness: 0.6,
+  });
+
+  panelMaterial.normalScale.set(0, 1);
+
+  const panel = new THREE.Mesh(panelGeometry, panelMaterial);
+
+  panel.position.set(0, -frameThickness / 2, 0);
+  panel.castShadow = true;
+
+  // Рама двери
+  const frameMaterial = new THREE.MeshPhysicalMaterial({ 
+    map: doorTextures.color,
+    aoMap: doorTextures.arm,
+    aoMapIntensity: 1,
+    metalnessMap: doorTextures.arm,
+    roughnessMap: doorTextures.arm,
+    normalMap: doorTextures.normal,
+    side: THREE.DoubleSide,
+    clearcoat: 0,
+    clearcoatRoughness: 0,
+    metalness: 0.1,
+    roughness: 0.6,
+  });
+  frameMaterial.normalScale.set(0, 1);
+
+  // Верхняя часть рамы
+  const topFrame = new THREE.Mesh(
+    new THREE.BoxGeometry(
+      width + 2 * frameThickness,
+      frameThickness,
+      thickness
+    ),
+    frameMaterial
+  );
+
+  // Боковые части рамы
+  const leftFrame = new THREE.Mesh(
+    new THREE.BoxGeometry(
+      frameThickness,
+      height + 2 * frameThickness,
+      thickness
+    ),
+    frameMaterial
+  );
+
+  const rightFrame = new THREE.Mesh(
+    new THREE.BoxGeometry(
+      frameThickness,
+      height + 2 * frameThickness,
+      thickness
+    ),
+    frameMaterial
+  );
+
+  panel.castShadow = true;
+  topFrame.castShadow = true;
+  leftFrame.castShadow = true;
+  rightFrame.castShadow = true;
+
+  topFrame.position.set(0, height / 2 + frameThickness / 2, 0);
+  topFrame.scale.set(0.95, 0.95, 0.95)
+  leftFrame.position.set(-width / 2 - frameThickness / 2, 0, 0);
+  rightFrame.position.set(width / 2 + frameThickness / 2, 0, 0);
+  doorGroup.add(panel);
+  doorGroup.add(topFrame);
+  doorGroup.add(leftFrame);
+  doorGroup.add(rightFrame);
+
+  // Ручка двери
+  let modelPreloader = new LoadingManager(
+    () => {
+      doorGroup.add(handle.model);
+      // createGui();
+    },
+    (itemUrl, itemsLoaded, itemsTotal) => {
+      let loadProc = itemsLoaded / itemsTotal;
+    }
+  );
+
+  let handle = new useCreateModel({
+    model: `${models}handle.glb`,
+    scene: scene,
+    scale: new THREE.Vector3(1, 1, 1),
+    meshStore: mashes.value,
+    preloader: modelPreloader,
+    rotation: {
+      x: 0,
+      y: 0,
+      z: 0,
+    },
+
+    position: {
+      x: width / 2 - 0.1,
+      y: 0,
+      z: thickness / 2,
+    },
+  });
+
+  transformControls.attach(doorGroup);
+  return doorGroup;
 };
 
 const createPlane = (material, geometry) => {
@@ -189,10 +352,6 @@ const createPlane = (material, geometry) => {
   scene.add(plane);
 };
 
-const resizeModel = (toScale) => {
-  door.model.scale.set(toScale, toScale, toScale);
-};
-
 const createGui = () => {
   scene.add(new THREE.AxesHelper(2));
 
@@ -201,13 +360,35 @@ const createGui = () => {
   let door_scale = gui.addFolder("Scale");
 
   door_scale
-    .add(scale, "total")
-    .min(0.2)
+    .add(doorParams, "width")
+    .min(0.5)
     .max(3)
-    .step(0.001)
-    .name("Scale")
-    .onChange(() => {
-      resizeModel(scale.total);
+    .onFinishChange((value) => {
+      scene.remove(alterDoor);
+      alterDoor = createAlterDoor(
+        value,
+        doorParams.height,
+        doorParams.thickness,
+        doorParams.frameThickness
+      );
+      scene.add(alterDoor);
+      alterDoor.position.set(2, 0.5 + frameThickness, 0);
+    });
+
+  door_scale
+    .add(doorParams, "height")
+    .min(0.5)
+    .max(3)
+    .onFinishChange((value) => {
+      scene.remove(alterDoor);
+      alterDoor = createAlterDoor(
+        doorParams.width,
+        value,
+        doorParams.thickness,
+        doorParams.frameThickness
+      );
+      scene.add(alterDoor);
+      alterDoor.position.set(2, 0.5 + frameThickness, 0);
     });
 
   box_Material
@@ -299,6 +480,13 @@ const init = () => {
     maxDistance: 7,
   });
 
+  transformControls = useTransformControl({
+    camera,
+    renderer,
+    scene,
+    orbitControls: controls,
+  });
+
   createLight(lightParams.value);
 
   createBox(boxMaterialParametrs.value, boxGeometryParametrs.value);
@@ -332,33 +520,16 @@ const init = () => {
 
   createEnvierment();
 
-  transformControls = useTransformControl({
-    camera,
-    renderer,
-    scene,
-    orbitControls: controls,
-  });
+  alterDoor = createAlterDoor(
+    doorWidth,
+    doorHeight,
+    doorThickness,
+    frameThickness
+  );
+  scene.add(alterDoor);
+  alterDoor.position.set(2, 0.5 + frameThickness, 0);
 
-  door = new useCreateModel({
-    model: `${models}door.glb`,
-    scene: scene,
-    scale: new THREE.Vector3(scale.total, scale.total, scale.total),
-    meshStore: mashes.value,
-    controls: transformControls,
-    preloader: createPreloader(),
-
-    rotation: {
-      x: 0,
-      y: Math.PI / 2,
-      z: 0,
-    },
-
-    position: {
-      x: 2,
-      y: -0.5,
-      z: 0,
-    },
-  });
+  createGui();
 
   useCanvasResize(camera, webglCanvas.value, renderer);
 };
@@ -373,7 +544,7 @@ onMounted(() => {
   <div class="canvas_instructions">
     <p>G : Move</p>
     <p>R : Rotate</p>
-    <p>S : Scale</p>
+    <!-- <p>S : Scale</p> -->
   </div>
   <div ref="webglCanvas" class="canvas_compositions"></div>
 </template>
