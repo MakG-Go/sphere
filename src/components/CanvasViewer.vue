@@ -33,7 +33,8 @@ let delta,
   boxGeometry,
   transformControls,
   alterDoor,
-  door;
+  door,
+  doorGroup;
 
 // Настройки двери
 let doorWidth = 1;
@@ -180,14 +181,11 @@ const createBox = (material, geometry) => {
 };
 
 const createAlterDoor = (width, height, thickness, frameThickness) => {
-  useTextureLoader(doorMap, doorTextures);
-
-  for (let texture in doorTextures) {
-    doorTextures[texture].wrapS = THREE.RepeatWrapping;
-    doorTextures[texture].wrapT = THREE.RepeatWrapping;
+  if (doorGroup) {
+    destroyModel(doorGroup)
   }
 
-  const doorGroup = new THREE.Group();
+  doorGroup = new THREE.Group();
 
   function createBeveledBoxGeometry(width, height, depth, bevelSize) {
     // Создаем форму с фасками
@@ -249,7 +247,7 @@ const createAlterDoor = (width, height, thickness, frameThickness) => {
   panel.castShadow = true;
 
   // Рама двери
-  const frameMaterial = new THREE.MeshPhysicalMaterial({ 
+  const frameMaterial = new THREE.MeshPhysicalMaterial({
     map: doorTextures.color,
     aoMap: doorTextures.arm,
     aoMapIntensity: 1,
@@ -262,6 +260,7 @@ const createAlterDoor = (width, height, thickness, frameThickness) => {
     metalness: 0.1,
     roughness: 0.6,
   });
+
   frameMaterial.normalScale.set(0, 1);
 
   // Верхняя часть рамы
@@ -299,7 +298,7 @@ const createAlterDoor = (width, height, thickness, frameThickness) => {
   rightFrame.castShadow = true;
 
   topFrame.position.set(0, height / 2 + frameThickness / 2, 0);
-  topFrame.scale.set(0.95, 0.95, 0.95)
+  topFrame.scale.set(0.95, 0.95, 0.95);
   leftFrame.position.set(-width / 2 - frameThickness / 2, 0, 0);
   rightFrame.position.set(width / 2 + frameThickness / 2, 0, 0);
   doorGroup.add(panel);
@@ -338,6 +337,7 @@ const createAlterDoor = (width, height, thickness, frameThickness) => {
   });
 
   transformControls.attach(doorGroup);
+
   return doorGroup;
 };
 
@@ -454,6 +454,46 @@ const canvasTick = () => {
   requestAnimationFrame(canvasTick);
 };
 
+
+
+const destroyModel = (group) => {
+  group.traverse((child) => {
+    if (child.isMesh) {
+      child.geometry.dispose();
+      child.geometry = null;
+      if (child.material.map) {
+        child.material.map.dispose();
+        child.material.map = null;
+      }
+      if (child.material.metalnessMap) {
+        child.material.metalnessMap.dispose();
+        child.material.metalnessMap = null;
+      }
+      if (child.material.roughnessMap) {
+        child.material.roughnessMap.dispose();
+        child.material.roughnessMap = null;
+      }
+      if (child.material.normalMap) {
+        child.material.normalMap.dispose();
+        child.material.normalMap = null;
+      }
+
+
+
+      child.material.dispose();
+      child.material = null;
+
+      if (child instanceof THREE.Texture) {
+        child.dispose();
+        child = null;
+      }
+    }
+    if (child.isGroup) {
+      scene.remove(child);
+    }
+  });
+};
+
 const init = () => {
   sizes.value = {
     width: webglCanvas.value.offsetWidth,
@@ -519,6 +559,12 @@ const init = () => {
   );
 
   createEnvierment();
+
+  useTextureLoader(doorMap, doorTextures);
+  for (let texture in doorTextures) {
+    doorTextures[texture].wrapS = THREE.RepeatWrapping;
+    doorTextures[texture].wrapT = THREE.RepeatWrapping;
+  }
 
   alterDoor = createAlterDoor(
     doorWidth,
